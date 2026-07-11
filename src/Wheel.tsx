@@ -7,6 +7,8 @@ type Props = {
   animate: boolean
   ariaLabel: string
   onSpinEnd: () => void
+  /** Pointer position on the rim in degrees: 0 top, 90 right, 180 bottom, 270 left. */
+  pointerAngle?: number
   className?: string
 }
 
@@ -34,6 +36,7 @@ export default function Wheel({
   animate,
   ariaLabel,
   onSpinEnd,
+  pointerAngle = 0,
   className = 'max-w-md',
 }: Props) {
   let acc = 0
@@ -92,7 +95,9 @@ export default function Wheel({
         </g>
         <circle cx={CX} cy={CY} r="10" fill="white" stroke="#334155" strokeWidth="2" />
         {/* two-tone pointer stays readable on any background (cards, OBS scenes) */}
-        <polygon points="90,1 110,1 100,22" fill="white" stroke="#0f172a" strokeWidth="2.5" strokeLinejoin="round" />
+        <g transform={pointerAngle ? `rotate(${pointerAngle} ${CX} ${CY})` : undefined}>
+          <polygon points="90,1 110,1 100,22" fill="white" stroke="#0f172a" strokeWidth="2.5" strokeLinejoin="round" />
+        </g>
       </svg>
     </div>
   )

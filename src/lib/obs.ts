@@ -1,5 +1,32 @@
 export type ObsStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
 
+// Obfuscation only, not encryption: anyone with the link and this source can
+// decode it. It merely keeps the password out of plain sight in the URL bar.
+const XOR_KEY = new TextEncoder().encode('rad-obs-bookmark-k1')
+
+const xor = (data: Uint8Array) => data.map((b, i) => b ^ XOR_KEY[i % XOR_KEY.length])
+
+/** Pack OBS port + password into an obfuscated base64url blob for bookmark links. */
+export function packObsCreds(port: string, password: string): string {
+  const bytes = xor(new TextEncoder().encode(JSON.stringify({ p: port, w: password })))
+  let bin = ''
+  for (const b of bytes) bin += String.fromCharCode(b)
+  return btoa(bin).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
+}
+
+/** Reverse of packObsCreds; null on any malformed input. */
+export function unpackObsCreds(blob: string): { port: string; password: string } | null {
+  try {
+    const bin = atob(blob.replaceAll('-', '+').replaceAll('_', '/'))
+    const bytes = xor(Uint8Array.from(bin, (c) => c.charCodeAt(0)))
+    const { p, w } = JSON.parse(new TextDecoder().decode(bytes))
+    if (typeof p !== 'string' || !/^\d{1,5}$/.test(p) || typeof w !== 'string') return null
+    return { port: p, password: w }
+  } catch {
+    return null
+  }
+}
+
 export type ObsConnection = {
   emit: (eventName: string, eventData: Record<string, unknown>) => void
   close: () => void

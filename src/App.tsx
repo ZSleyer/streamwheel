@@ -1,10 +1,14 @@
 import {
+  Bookmark,
   Check,
   Dices,
+  Eye,
+  EyeOff,
   FerrisWheel,
   Link as LinkIcon,
   PartyPopper,
   Plus,
+  Settings,
   Sparkles,
   TriangleAlert,
   Video,
@@ -14,7 +18,10 @@ import { useEffect, useRef, useState } from 'react'
 import Confetti from './Confetti'
 import Wheel from './Wheel'
 import { initialLang, messages, persistLang, type Lang } from './lib/i18n'
-import { connectObs, type ObsConnection, type ObsStatus } from './lib/obs'
+import { connectObs, packObsCreds, unpackObsCreds, type ObsConnection, type ObsStatus } from './lib/obs'
+
+// Bookmark links carry obfuscated OBS credentials in the "k" query param.
+const bookmarkCreds = unpackObsCreds(new URLSearchParams(window.location.search).get('k') ?? '')
 import {
   MAX_ENTRIES,
   MAX_LABEL,
@@ -35,6 +42,23 @@ const defaultEntries = () => ['Pizza', 'Pasta', 'Sushi', 'Tacos'].map(newEntry)
 
 /** Overlay mode renders only the wheel on a transparent background (OBS browser source). */
 const isOverlay = new URLSearchParams(window.location.search).has('overlay')
+
+type PointerPos = 'top' | 'right' | 'bottom' | 'left'
+const POINTER_ANGLE: Record<PointerPos, number> = { top: 0, right: 90, bottom: 180, left: 270 }
+const isPointerPos = (v: unknown): v is PointerPos =>
+  v === 'top' || v === 'right' || v === 'bottom' || v === 'left'
+
+function initialPointerPos(): PointerPos {
+  const fromUrl = new URLSearchParams(window.location.search).get('pointer')
+  if (isPointerPos(fromUrl)) return fromUrl
+  try {
+    const stored = localStorage.getItem('rad:pointer')
+    if (isPointerPos(stored)) return stored
+  } catch {
+    // fall through to default
+  }
+  return 'top'
+}
 
 /** URL hash wins over localStorage, both validated by decodeWheel. */
 function initialEntries(): Entry[] {
@@ -104,14 +128,49 @@ export default function App() {
   const fixedSum = overrideSum(entries)
   const canSpin = entries.length >= 2 && !spinning
 
+  const [pointerPos, setPointerPos] = useState<PointerPos>(initialPointerPos)
+  useEffect(() => {
+    if (isOverlay) return
+    try {
+      localStorage.setItem('rad:pointer', pointerPos)
+    } catch {
+      // best effort
+    }
+  }, [pointerPos])
+
+  // Overlay auto-hide: fade out after `hide` seconds of inactivity, fade back
+  // in on the next spin (with a short delay so the wheel is visible again).
+  const hideAfter = isOverlay ? Number(new URLSearchParams(window.location.search).get('hide')) || 0 : 0
+  const [overlayVisible, setOverlayVisible] = useState(true)
+  const overlayVisibleRef = useRef(true)
+  overlayVisibleRef.current = overlayVisible
+  const hideTimer = useRef<number | undefined>(undefined)
+  function armHideTimer() {
+    if (!hideAfter) return
+    clearTimeout(hideTimer.current)
+    hideTimer.current = window.setTimeout(() => setOverlayVisible(false), hideAfter * 1000)
+  }
+  useEffect(() => {
+    armHideTimer()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
+  }, [])
+
   function spinTo(idx: number) {
+    if (isOverlay && !overlayVisibleRef.current) {
+      // Fade back in first, then spin; the winner index is fixed so the
+      // result stays in sync with the editor page.
+      setOverlayVisible(true)
+      window.setTimeout(() => actions.current.spinTo(idx), 700)
+      return
+    }
     if (!canSpin || idx < 0 || idx >= entries.length) return
     const start = weights.slice(0, idx).reduce((s, w) => s + w, 0) * 3.6
     const sweep = weights[idx] * 3.6
     // Land somewhere inside the winning segment, not always dead center.
     const target = start + sweep / 2 + (Math.random() - 0.5) * sweep * 0.8
     const current = ((rotation % 360) + 360) % 360
-    const next = rotation + 4 * 360 + ((360 - ((target + current) % 360)) % 360)
+    const pointer = POINTER_ANGLE[pointerPos]
+    const next = rotation + 4 * 360 + ((pointer + 360 - ((target + current) % 360)) % 360)
     pendingWinner.current = entries[idx].label
     setWinner(null)
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -139,8 +198,15 @@ export default function App() {
   // Remote control for the overlay running inside OBS (separate browser):
   // talk to the local obs-websocket server, which forwards events to browser sources.
   const [obsStatus, setObsStatus] = useState<ObsStatus>('disconnected')
-  const [obsPort, setObsPort] = useState('4455')
-  const [obsPassword, setObsPassword] = useState('')
+  // Prefilled from bookmark links, see the bookmark button.
+  const [obsPort, setObsPort] = useState(bookmarkCreds?.port ?? '4455')
+  const [obsPassword, setObsPassword] = useState(bookmarkCreds?.password ?? '')
+  const [showObsPassword, setShowObsPassword] = useState(false)
+  const [bookmarkCopied, setBookmarkCopied] = useState(false)
+  // Native <dialog> gives us focus trap, Escape and backdrop for free.
+  const dialogRef = useRef<HTMLDialogElement | null>(null)
+  const openSettings = () => dialogRef.current?.showModal()
+  const closeSettings = () => dialogRef.current?.close()
   const obsRef = useRef<ObsConnection | null>(null)
   function toggleObs() {
     if (obsRef.current) {
@@ -157,6 +223,28 @@ export default function App() {
         obsRef.current = null
       }
     })
+  }
+
+  // A bookmark link carries the OBS credentials, so connect right away.
+  // The ref guards against StrictMode double-mount toggling the connection off again.
+  const autoConnected = useRef(false)
+  useEffect(() => {
+    if (!isOverlay && bookmarkCreds && !autoConnected.current) {
+      autoConnected.current = true
+      toggleObs()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
+  }, [])
+
+  async function copyObsBookmark() {
+    const url = `${location.origin}${location.pathname}?k=${packObsCreds(obsPort, obsPassword)}#${encodeWheel(entries)}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setBookmarkCopied(true)
+      setTimeout(() => setBookmarkCopied(false), 2000)
+    } catch {
+      // Clipboard blocked, nothing sensible to fall back to for a secret-bearing link.
+    }
   }
 
   // Live control channel between editor page and overlay (same browser).
@@ -185,8 +273,9 @@ export default function App() {
     saveWheel(entries)
     bcRef.current?.postMessage({ type: 'wheel', data: encodeWheel(entries) })
     obsRef.current?.emit('rad-wheel', { data: encodeWheel(entries) })
-    // A share hash goes stale as soon as the wheel changes, drop it.
-    if (location.hash) history.replaceState(null, '', location.pathname)
+    // A share hash goes stale as soon as the wheel changes, drop it
+    // (keep the query string, bookmark links carry OBS credentials there).
+    if (location.hash) history.replaceState(null, '', location.pathname + location.search)
   }, [entries])
 
   // Overlay: space spins even without focus (handy with OBS "Interact"), and
@@ -226,6 +315,7 @@ export default function App() {
     clearTimeout(finishTimer.current)
     setSpinning(false)
     setWinner(pendingWinner.current)
+    armHideTimer()
     if (confettiRef.current && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       setBurst(true)
       window.setTimeout(() => setBurst(false), 4200)
@@ -254,11 +344,32 @@ export default function App() {
     }
   }
 
+  // Auto-hide seconds for the overlay link, configured on the editor page.
+  const [hideSecs, setHideSecs] = useState(() => {
+    try {
+      return localStorage.getItem('rad:hide') ?? '0'
+    } catch {
+      return '0'
+    }
+  })
+  useEffect(() => {
+    if (isOverlay) return
+    try {
+      localStorage.setItem('rad:hide', hideSecs)
+    } catch {
+      // best effort
+    }
+  }, [hideSecs])
+  const overlayHref = `?overlay${Number(hideSecs) > 0 ? `&hide=${Number(hideSecs)}` : ''}${pointerPos !== 'top' ? `&pointer=${pointerPos}` : ''}#${encodeWheel(entries)}`
+
   const wheelAlt = `${t.wheelAlt} ${entries.map((e) => e.label || '?').join(', ')}`
+  const year = new Date().getFullYear()
 
   if (isOverlay) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-transparent p-4">
+      <div
+        className={`flex min-h-screen flex-col items-center justify-center gap-6 bg-transparent p-4 transition-opacity duration-700 motion-reduce:transition-none ${overlayVisible ? 'opacity-100' : 'opacity-0'}`}
+      >
         {burst && <Confetti />}
         <button
           type="button"
@@ -274,6 +385,7 @@ export default function App() {
             animate={spinning}
             ariaLabel={wheelAlt}
             onSpinEnd={onSpinEnd}
+            pointerAngle={POINTER_ANGLE[pointerPos]}
             className="max-w-none drop-shadow-2xl"
           />
         </button>
@@ -296,9 +408,9 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-b from-slate-100 via-indigo-100 to-slate-100 text-slate-900 dark:from-slate-950 dark:via-indigo-950 dark:to-slate-950 dark:text-slate-100">
+    <div className="flex min-h-screen flex-col bg-linear-to-b from-slate-100 via-indigo-100 to-slate-100 text-slate-900 dark:from-slate-950 dark:via-indigo-950 dark:to-slate-950 dark:text-slate-100">
       {burst && <Confetti />}
-      <div className="mx-auto max-w-6xl px-4 py-8">
+      <div className="mx-auto w-full max-w-6xl grow px-4 py-8">
         <header className="mb-8 flex items-start justify-between gap-4">
           <div>
             <h1 className="flex items-center gap-3 text-4xl font-extrabold tracking-tight">
@@ -309,21 +421,23 @@ export default function App() {
             </h1>
             <p className="mt-2 max-w-xl text-slate-700 dark:text-slate-300">{t.tagline}</p>
           </div>
-          <button
-            type="button"
-            onClick={() => setLang(lang === 'de' ? 'en' : 'de')}
-            aria-label={t.switchLang}
-            className={secondaryClass}
-          >
-            {lang === 'de' ? 'EN' : 'DE'}
-          </button>
+          <div className="flex shrink-0 gap-2">
+            <button type="button" onClick={openSettings} aria-label={t.openSettings} className={iconButtonClass}>
+              <Settings aria-hidden="true" className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setLang(lang === 'de' ? 'en' : 'de')}
+              aria-label={t.switchLang}
+              className={secondaryClass}
+            >
+              {lang === 'de' ? 'EN' : 'DE'}
+            </button>
+          </div>
         </header>
 
-        <main className="grid items-start gap-8 lg:grid-cols-[3fr_2fr]">
-          <section
-            aria-label={t.appTitle}
-            className="rounded-3xl bg-white p-6 shadow-xl ring-1 ring-slate-200 sm:p-8 dark:bg-slate-900 dark:shadow-[0_0_80px_-20px] dark:shadow-indigo-500/30 dark:ring-white/10"
-          >
+        <main className="grid items-start gap-10 lg:grid-cols-[1.2fr_1fr]">
+          <section aria-label={t.appTitle} className="lg:sticky lg:top-8">
             <Wheel
               entries={entries}
               weights={weights}
@@ -331,7 +445,8 @@ export default function App() {
               animate={spinning}
               ariaLabel={wheelAlt}
               onSpinEnd={onSpinEnd}
-              className="max-w-lg"
+              pointerAngle={POINTER_ANGLE[pointerPos]}
+              className="max-w-lg drop-shadow-[0_20px_50px_rgba(99,102,241,0.35)]"
             />
             <div className="mt-8 flex flex-col items-center gap-3">
               <button
@@ -344,16 +459,6 @@ export default function App() {
                 {spinning ? t.spinning : t.spin}
               </button>
               {entries.length < 2 && <p className="text-sm">{t.needTwo}</p>}
-              <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={confettiOn}
-                  onChange={(ev) => setConfettiOn(ev.target.checked)}
-                  className="h-5 w-5 accent-fuchsia-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fuchsia-600"
-                />
-                <Sparkles aria-hidden="true" className="h-5 w-5" />
-                {t.confetti}
-              </label>
               <p aria-live="polite" className="min-h-8 max-w-full text-center text-2xl font-bold wrap-break-word">
                 {winner !== null && (
                   <>
@@ -368,7 +473,7 @@ export default function App() {
                   {copied ? t.copied : t.share}
                 </button>
                 <a
-                  href={`?overlay#${encodeWheel(entries)}`}
+                  href={overlayHref}
                   target="_blank"
                   rel="noopener"
                   className={`${secondaryClass} flex items-center gap-2`}
@@ -377,48 +482,8 @@ export default function App() {
                   {t.overlay}
                 </a>
               </div>
-              <p className="max-w-md text-center text-sm text-slate-600 dark:text-slate-400">{t.overlayTip}</p>
-
-              <div className="mt-2 w-full max-w-md rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
-                <h2 className="mb-1 flex items-center gap-2 font-semibold">
-                  <Video aria-hidden="true" className="h-5 w-5" />
-                  {t.obsHeading}
-                </h2>
-                <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">{t.obsHint}</p>
-                <div className="flex flex-wrap items-end gap-3">
-                  <div className="w-24">
-                    <label htmlFor="obs-port" className="mb-1 block text-sm">
-                      {t.obsPort}
-                    </label>
-                    <input
-                      id="obs-port"
-                      type="text"
-                      inputMode="numeric"
-                      value={obsPort}
-                      disabled={obsStatus === 'connected' || obsStatus === 'connecting'}
-                      onChange={(ev) => setObsPort(ev.target.value.replace(/\D/g, '').slice(0, 5))}
-                      className={inputClass}
-                    />
-                  </div>
-                  <div className="min-w-40 grow">
-                    <label htmlFor="obs-password" className="mb-1 block text-sm">
-                      {t.obsPassword}
-                    </label>
-                    <input
-                      id="obs-password"
-                      type="password"
-                      autoComplete="off"
-                      value={obsPassword}
-                      disabled={obsStatus === 'connected' || obsStatus === 'connecting'}
-                      onChange={(ev) => setObsPassword(ev.target.value)}
-                      className={inputClass}
-                    />
-                  </div>
-                  <button type="button" onClick={toggleObs} className={secondaryClass}>
-                    {obsStatus === 'connected' || obsStatus === 'connecting' ? t.obsDisconnect : t.obsConnect}
-                  </button>
-                </div>
-                <p aria-live="polite" className="mt-2 min-h-5 text-sm">
+              <p className="flex flex-wrap items-center justify-center gap-x-2 text-sm text-slate-600 dark:text-slate-400">
+                <span aria-live="polite">
                   {obsStatus === 'connecting' && t.obsStatusConnecting}
                   {obsStatus === 'connected' && (
                     <span className="text-emerald-700 dark:text-emerald-400">
@@ -429,11 +494,147 @@ export default function App() {
                   {obsStatus === 'error' && (
                     <span className="text-red-700 dark:text-red-400">
                       <TriangleAlert aria-hidden="true" className="mr-1 inline h-4 w-4" />
-                      {t.obsStatusError}
+                      {t.obsBadgeError}
                     </span>
                   )}
-                </p>
-              </div>
+                  {obsStatus === 'disconnected' && t.obsShortHint}
+                </span>
+                <button
+                  type="button"
+                  onClick={openSettings}
+                  className="inline-flex items-center gap-1 font-medium text-indigo-700 underline underline-offset-2 hover:text-indigo-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fuchsia-600 dark:text-indigo-300 dark:hover:text-indigo-100"
+                >
+                  <Settings aria-hidden="true" className="h-4 w-4" />
+                  {t.settings}
+                </button>
+              </p>
+
+              <dialog
+                ref={dialogRef}
+                aria-labelledby="settings-title"
+                className="m-auto w-[calc(100%-2rem)] max-w-lg rounded-3xl bg-white p-6 text-slate-900 shadow-2xl backdrop:bg-black/60 dark:bg-slate-900 dark:text-slate-100"
+              >
+                <div className="mb-4 flex items-center justify-between gap-4">
+                  <h2 id="settings-title" className="flex items-center gap-2 text-xl font-semibold">
+                    <Settings aria-hidden="true" className="h-5 w-5" />
+                    {t.settings}
+                  </h2>
+                  <button type="button" onClick={closeSettings} aria-label={t.close} className={iconButtonClass}>
+                    <X aria-hidden="true" className="h-5 w-5" />
+                  </button>
+                </div>
+                <div>
+                  <label className="mb-3 flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={confettiOn}
+                      onChange={(ev) => setConfettiOn(ev.target.checked)}
+                      className="h-5 w-5 accent-fuchsia-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fuchsia-600"
+                    />
+                    <Sparkles aria-hidden="true" className="h-5 w-5" />
+                    {t.confetti}
+                  </label>
+                  <div className="mb-3">
+                    <label htmlFor="pointer-pos" className="mb-1 block text-sm">
+                      {t.pointerPos}
+                    </label>
+                    <select
+                      id="pointer-pos"
+                      value={pointerPos}
+                      onChange={(ev) => setPointerPos(ev.target.value as PointerPos)}
+                      className={`${inputClass} w-40`}
+                    >
+                      <option value="top">{t.posTop}</option>
+                      <option value="right">{t.posRight}</option>
+                      <option value="bottom">{t.posBottom}</option>
+                      <option value="left">{t.posLeft}</option>
+                    </select>
+                  </div>
+                  <p className="mb-2 text-sm text-slate-600 dark:text-slate-400">{t.overlayTip}</p>
+                  <div className="mb-3">
+                    <label htmlFor="overlay-hide" className="mb-1 block text-sm">
+                      {t.overlayHide}
+                    </label>
+                    <input
+                      id="overlay-hide"
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={3600}
+                      value={hideSecs}
+                      onChange={(ev) => setHideSecs(ev.target.value.replace(/\D/g, '').slice(0, 4))}
+                      className={`${inputClass} w-28`}
+                    />
+                  </div>
+                  <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">{t.obsHint}</p>
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div className="w-24">
+                      <label htmlFor="obs-port" className="mb-1 block text-sm">
+                        {t.obsPort}
+                      </label>
+                      <input
+                        id="obs-port"
+                        type="text"
+                        inputMode="numeric"
+                        value={obsPort}
+                        disabled={obsStatus === 'connected' || obsStatus === 'connecting'}
+                        onChange={(ev) => setObsPort(ev.target.value.replace(/\D/g, '').slice(0, 5))}
+                        className={inputClass}
+                      />
+                    </div>
+                    <div className="min-w-40 grow">
+                      <label htmlFor="obs-password" className="mb-1 block text-sm">
+                        {t.obsPassword}
+                      </label>
+                      <div className="relative">
+                        <input
+                          id="obs-password"
+                          type={showObsPassword ? 'text' : 'password'}
+                          autoComplete="off"
+                          value={obsPassword}
+                          disabled={obsStatus === 'connected' || obsStatus === 'connecting'}
+                          onChange={(ev) => setObsPassword(ev.target.value)}
+                          className={`${inputClass} pr-11`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowObsPassword((s) => !s)}
+                          aria-label={showObsPassword ? t.hidePassword : t.showPassword}
+                          aria-pressed={showObsPassword}
+                          className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-xl text-slate-600 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset--2 focus-visible:outline-fuchsia-600 dark:text-slate-400 dark:hover:text-slate-100"
+                        >
+                          {showObsPassword ? (
+                            <EyeOff aria-hidden="true" className="h-5 w-5" />
+                          ) : (
+                            <Eye aria-hidden="true" className="h-5 w-5" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                    <button type="button" onClick={toggleObs} className={secondaryClass}>
+                      {obsStatus === 'connected' || obsStatus === 'connecting' ? t.obsDisconnect : t.obsConnect}
+                    </button>
+                  </div>
+                  <p aria-live="polite" className="mt-2 min-h-5 text-sm">
+                    {obsStatus === 'error' && (
+                      <span className="text-red-700 dark:text-red-400">{t.obsStatusError}</span>
+                    )}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={copyObsBookmark}
+                    className={`${secondaryClass} flex items-center gap-2 text-sm`}
+                  >
+                    {bookmarkCopied ? (
+                      <Check aria-hidden="true" className="h-5 w-5" />
+                    ) : (
+                      <Bookmark aria-hidden="true" className="h-5 w-5" />
+                    )}
+                    {bookmarkCopied ? t.copied : t.obsBookmark}
+                  </button>
+                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">{t.obsBookmarkHint}</p>
+                </div>
+              </dialog>
             </div>
           </section>
 
@@ -526,6 +727,16 @@ export default function App() {
           </section>
         </main>
       </div>
+
+      <footer className="mt-10 border-t border-slate-300 bg-white/60 py-6 dark:border-slate-800 dark:bg-slate-950/60">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 text-sm text-slate-600 dark:text-slate-400">
+          <span className="flex items-center gap-2">
+            <FerrisWheel aria-hidden="true" className="h-4 w-4" />
+            {t.appTitle}
+          </span>
+          <span>© {year > 2026 ? `2026 - ${year}` : year} ZSleyer</span>
+        </div>
+      </footer>
     </div>
   )
 }
