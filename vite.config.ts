@@ -9,7 +9,8 @@ const csp = {
   transformIndexHtml(html: string) {
     return html.replace(
       '<head>',
-      `<head>\n    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'" />`,
+      // loopback websockets are allowed for the local obs-websocket server
+      `<head>\n    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws://127.0.0.1:* ws://localhost:*; base-uri 'none'; form-action 'none'" />`,
     )
   },
 }

@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from 'react'
 import Confetti from './Confetti'
 import Wheel from './Wheel'
 import { initialLang, messages, persistLang, type Lang } from './lib/i18n'
+import { connectObs, type ObsConnection, type ObsStatus } from './lib/obs'
 import {
   MAX_ENTRIES,
   MAX_LABEL,
@@ -129,9 +130,33 @@ export default function App() {
   function spin() {
     if (!canSpin) return
     const idx = pickWinner(weights)
-    // Broadcast first so an open overlay spins to the same winner.
+    // Broadcast first so open overlays (same browser or inside OBS) spin to the same winner.
     bcRef.current?.postMessage({ type: 'spin', idx })
+    obsRef.current?.emit('rad-spin', { idx })
     spinTo(idx)
+  }
+
+  // Remote control for the overlay running inside OBS (separate browser):
+  // talk to the local obs-websocket server, which forwards events to browser sources.
+  const [obsStatus, setObsStatus] = useState<ObsStatus>('disconnected')
+  const [obsPort, setObsPort] = useState('4455')
+  const [obsPassword, setObsPassword] = useState('')
+  const obsRef = useRef<ObsConnection | null>(null)
+  function toggleObs() {
+    if (obsRef.current) {
+      obsRef.current.close()
+      obsRef.current = null
+      setObsStatus('disconnected')
+      return
+    }
+    obsRef.current = connectObs(obsPort, obsPassword, (s) => {
+      setObsStatus(s)
+      if (s === 'connected') {
+        obsRef.current?.emit('rad-wheel', { data: encodeWheel(entriesRef.current) })
+      } else if (s === 'disconnected' || s === 'error') {
+        obsRef.current = null
+      }
+    })
   }
 
   // Live control channel between editor page and overlay (same browser).
@@ -159,11 +184,13 @@ export default function App() {
     if (isOverlay) return
     saveWheel(entries)
     bcRef.current?.postMessage({ type: 'wheel', data: encodeWheel(entries) })
+    obsRef.current?.emit('rad-wheel', { data: encodeWheel(entries) })
     // A share hash goes stale as soon as the wheel changes, drop it.
     if (location.hash) history.replaceState(null, '', location.pathname)
   }, [entries])
 
-  // Overlay: space spins even without focus (handy with OBS "Interact").
+  // Overlay: space spins even without focus (handy with OBS "Interact"), and
+  // CustomEvents arrive from the editor page via obs-websocket emit_event.
   useEffect(() => {
     if (!isOverlay) return
     const onKey = (ev: KeyboardEvent) => {
@@ -172,8 +199,25 @@ export default function App() {
         actions.current.spinTo(pickWinner(effectiveWeights(entriesRef.current)))
       }
     }
+    const onObsSpin = (ev: Event) => {
+      const idx = (ev as CustomEvent).detail?.idx
+      if (typeof idx === 'number') actions.current.spinTo(idx)
+    }
+    const onObsWheel = (ev: Event) => {
+      const data = (ev as CustomEvent).detail?.data
+      if (typeof data === 'string') {
+        const es = decodeWheel(data)
+        if (es) actions.current.setEntries(es)
+      }
+    }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('rad-spin', onObsSpin)
+    window.addEventListener('rad-wheel', onObsWheel)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('rad-spin', onObsSpin)
+      window.removeEventListener('rad-wheel', onObsWheel)
+    }
   }, [])
   const entriesRef = useRef(entries)
   entriesRef.current = entries
@@ -334,6 +378,62 @@ export default function App() {
                 </a>
               </div>
               <p className="max-w-md text-center text-sm text-slate-600 dark:text-slate-400">{t.overlayTip}</p>
+
+              <div className="mt-2 w-full max-w-md rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
+                <h2 className="mb-1 flex items-center gap-2 font-semibold">
+                  <Video aria-hidden="true" className="h-5 w-5" />
+                  {t.obsHeading}
+                </h2>
+                <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">{t.obsHint}</p>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="w-24">
+                    <label htmlFor="obs-port" className="mb-1 block text-sm">
+                      {t.obsPort}
+                    </label>
+                    <input
+                      id="obs-port"
+                      type="text"
+                      inputMode="numeric"
+                      value={obsPort}
+                      disabled={obsStatus === 'connected' || obsStatus === 'connecting'}
+                      onChange={(ev) => setObsPort(ev.target.value.replace(/\D/g, '').slice(0, 5))}
+                      className={inputClass}
+                    />
+                  </div>
+                  <div className="min-w-40 grow">
+                    <label htmlFor="obs-password" className="mb-1 block text-sm">
+                      {t.obsPassword}
+                    </label>
+                    <input
+                      id="obs-password"
+                      type="password"
+                      autoComplete="off"
+                      value={obsPassword}
+                      disabled={obsStatus === 'connected' || obsStatus === 'connecting'}
+                      onChange={(ev) => setObsPassword(ev.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+                  <button type="button" onClick={toggleObs} className={secondaryClass}>
+                    {obsStatus === 'connected' || obsStatus === 'connecting' ? t.obsDisconnect : t.obsConnect}
+                  </button>
+                </div>
+                <p aria-live="polite" className="mt-2 min-h-5 text-sm">
+                  {obsStatus === 'connecting' && t.obsStatusConnecting}
+                  {obsStatus === 'connected' && (
+                    <span className="text-emerald-700 dark:text-emerald-400">
+                      <Check aria-hidden="true" className="mr-1 inline h-4 w-4" />
+                      {t.obsStatusConnected}
+                    </span>
+                  )}
+                  {obsStatus === 'error' && (
+                    <span className="text-red-700 dark:text-red-400">
+                      <TriangleAlert aria-hidden="true" className="mr-1 inline h-4 w-4" />
+                      {t.obsStatusError}
+                    </span>
+                  )}
+                </p>
+              </div>
             </div>
           </section>
 
