@@ -1,1 +1,13 @@
 @import "tailwindcss";
+
+@keyframes confetti-fall {
+  from {
+    /* start well offscreen so the slow ease-in start is not visible */
+    transform: translateY(-12vh) rotate(0deg);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(105vh) rotate(720deg);
+    opacity: 0.7;
+  }
+}

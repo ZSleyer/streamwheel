@@ -1,20 +1,22 @@
 export type Entry = {
   id: string
   label: string
-  /** Fester Prozentwert (0–100). Fehlt er, wird der Rest gleichmäßig verteilt. */
+  /** Fixed percentage (0-100). If absent, the remainder is split evenly. */
   percent?: number
+  /** Custom segment color (#rrggbb). If absent, the palette color is used. */
+  color?: string
 }
 
 export const MAX_ENTRIES = 24
 export const MAX_LABEL = 60
 const STORAGE_KEY = 'rad:v1'
 
-// Dunkle Farben, alle mit Kontrast ≥ 4.5:1 zu weißem Text.
+// Dark colors, all with contrast >= 4.5:1 against white text.
 export const PALETTE = [
-  '#1d4ed8', // blau
-  '#b91c1c', // rot
-  '#047857', // grün
-  '#6d28d9', // violett
+  '#1d4ed8', // blue
+  '#b91c1c', // red
+  '#047857', // green
+  '#6d28d9', // violet
   '#92400e', // amber
   '#be185d', // pink
   '#0e7490', // cyan
@@ -23,11 +25,11 @@ export const PALETTE = [
 
 export const colorOf = (index: number) => PALETTE[index % PALETTE.length]
 
-/** Summe der fest gesetzten Prozente (für Warnung > 100). */
+/** Sum of the fixed percentages (used for the > 100 warning). */
 export const overrideSum = (entries: Entry[]) =>
   entries.reduce((s, e) => s + (e.percent ?? 0), 0)
 
-/** Effektive Wahrscheinlichkeit je Eintrag in %, Summe 100. */
+/** Effective probability per entry in %, summing to 100. */
 export function effectiveWeights(entries: Entry[]): number[] {
   if (entries.length === 0) return []
   const fixedSum = overrideSum(entries)
@@ -35,12 +37,12 @@ export function effectiveWeights(entries: Entry[]): number[] {
   const freeShare = freeCount > 0 ? Math.max(0, 100 - fixedSum) / freeCount : 0
   const raw = entries.map((e) => e.percent ?? freeShare)
   const total = raw.reduce((s, r) => s + r, 0)
-  // Alles 0 oder Summe ≠ 100 (z.B. Overrides > 100): proportional normalisieren.
+  // All zero or sum != 100 (e.g. overrides > 100): normalize proportionally.
   if (total <= 0) return entries.map(() => 100 / entries.length)
   return raw.map((r) => (r / total) * 100)
 }
 
-/** Gewichtete Zufallsauswahl, Index des Gewinners. */
+/** Weighted random pick, returns the winner's index. */
 export function pickWinner(weights: number[]): number {
   const total = weights.reduce((s, w) => s + w, 0)
   const r = (crypto.getRandomValues(new Uint32Array(1))[0] / 2 ** 32) * total
@@ -52,11 +54,12 @@ export function pickWinner(weights: number[]): number {
   return weights.length - 1
 }
 
-/** Kompaktes Format für URL-Hash und localStorage: [{l, p?}, …] als base64url. */
+/** Compact format for URL hash and localStorage: [{l, p?, c?}, ...] as base64url. */
 export function encodeWheel(entries: Entry[]): string {
   const data = entries.map((e) => ({
     l: e.label,
     ...(e.percent !== undefined ? { p: e.percent } : {}),
+    ...(e.color !== undefined ? { c: e.color } : {}),
   }))
   const bytes = new TextEncoder().encode(JSON.stringify(data))
   let bin = ''
@@ -65,8 +68,8 @@ export function encodeWheel(entries: Entry[]): string {
 }
 
 /**
- * Einzige Vertrauensgrenze für externe Daten (URL-Hash, localStorage):
- * strikte Validierung, bei jedem Fehler null.
+ * Single trust boundary for external data (URL hash, localStorage):
+ * strict validation, returns null on any error.
  */
 export function decodeWheel(encoded: string): Entry[] | null {
   try {
@@ -78,10 +81,16 @@ export function decodeWheel(encoded: string): Entry[] | null {
     const entries: Entry[] = []
     for (const item of data) {
       if (typeof item !== 'object' || item === null) return null
-      const { l, p } = item as Record<string, unknown>
-      if (typeof l !== 'string' || l.length < 1 || l.length > MAX_LABEL) return null
+      const { l, p, c } = item as Record<string, unknown>
+      if (typeof l !== 'string' || l.length > MAX_LABEL) return null
       if (p !== undefined && (typeof p !== 'number' || !Number.isFinite(p) || p < 0 || p > 100)) return null
-      entries.push({ id: crypto.randomUUID(), label: l, ...(p !== undefined ? { percent: p } : {}) })
+      if (c !== undefined && (typeof c !== 'string' || !/^#[0-9a-f]{6}$/i.test(c))) return null
+      entries.push({
+        id: crypto.randomUUID(),
+        label: l,
+        ...(p !== undefined ? { percent: p } : {}),
+        ...(c !== undefined ? { color: c } : {}),
+      })
     }
     return entries
   } catch {
@@ -93,7 +102,7 @@ export function saveWheel(entries: Entry[]) {
   try {
     localStorage.setItem(STORAGE_KEY, encodeWheel(entries))
   } catch {
-    // localStorage voll oder blockiert — App funktioniert ohne weiter.
+    // localStorage full or blocked, the app keeps working without it.
   }
 }
 

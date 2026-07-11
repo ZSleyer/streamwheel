@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-// CSP nur im Build: der Dev-Server von Vite/React braucht Inline-Preamble-Skripte.
+// CSP only for builds: the Vite/React dev server needs inline preamble scripts.
 const csp = {
   name: 'inject-csp',
   apply: 'build' as const,

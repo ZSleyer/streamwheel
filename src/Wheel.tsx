@@ -7,6 +7,7 @@ type Props = {
   animate: boolean
   ariaLabel: string
   onSpinEnd: () => void
+  className?: string
 }
 
 const CX = 100
@@ -25,7 +26,16 @@ function segmentPath(a0: number, a1: number): string {
   return `M ${CX} ${CY} L ${x0} ${y0} A ${R} ${R} 0 ${large} 1 ${x1} ${y1} Z`
 }
 
-export default function Wheel({ entries, weights, rotation, animate, ariaLabel, onSpinEnd }: Props) {
+/** SVG wheel of fortune. Purely presentational, spinning is driven via the rotation prop. */
+export default function Wheel({
+  entries,
+  weights,
+  rotation,
+  animate,
+  ariaLabel,
+  onSpinEnd,
+  className = 'max-w-md',
+}: Props) {
   let acc = 0
   const segments = entries.map((e, i) => {
     const a0 = acc
@@ -35,12 +45,7 @@ export default function Wheel({ entries, weights, rotation, animate, ariaLabel, 
   })
 
   return (
-    <div className="relative mx-auto w-full max-w-md">
-      {/* Zeiger oben */}
-      <div
-        aria-hidden="true"
-        className="absolute left-1/2 top-0 z-10 h-0 w-0 -translate-x-1/2 border-x-[12px] border-t-[20px] border-x-transparent border-t-slate-900 drop-shadow dark:border-t-white"
-      />
+    <div className={`relative mx-auto w-full ${className}`}>
       <svg viewBox="0 0 200 200" role="img" aria-label={ariaLabel} className="w-full">
         <g
           style={{
@@ -50,28 +55,34 @@ export default function Wheel({ entries, weights, rotation, animate, ariaLabel, 
           }}
           onTransitionEnd={(ev) => ev.propertyName === 'transform' && onSpinEnd()}
         >
-          {segments.map(({ entry, i, a0, a1, mid, sweep }) => {
+          {segments.map(({ entry, i, a0, a1, sweep }) => {
             if (sweep <= 0) return null
+            const fill = entry.color ?? colorOf(i)
             if (sweep >= 359.99) {
-              return <circle key={entry.id} cx={CX} cy={CY} r={R} fill={colorOf(i)} />
+              return <circle key={entry.id} cx={CX} cy={CY} r={R} fill={fill} />
             }
-            return <path key={entry.id} d={segmentPath(a0, a1)} fill={colorOf(i)} stroke="white" strokeWidth="1" />
+            return <path key={entry.id} d={segmentPath(a0, a1)} fill={fill} stroke="white" strokeWidth="1" />
           })}
-          {segments.map(({ entry, i, mid, sweep }) => {
-            if (sweep < 14) return null
-            const [x, y] = point(mid, R * 0.62)
-            const label = entry.label.length > 12 ? entry.label.slice(0, 11) + '…' : entry.label
+          {segments.map(({ entry, mid, sweep }) => {
+            if (sweep < 8) return null
+            // Text runs outward along the radius, so its length is independent
+            // of the segment angle and never bleeds into neighbor segments.
+            const [x, y] = point(mid, R * 0.58)
+            const label = entry.label.length > 14 ? entry.label.slice(0, 13) + '…' : entry.label
             return (
               <text
                 key={entry.id}
                 x={x}
                 y={y}
                 fill="white"
+                stroke="#0f172a"
+                strokeWidth="2"
+                paintOrder="stroke"
                 fontSize="9"
                 fontWeight="600"
                 textAnchor="middle"
                 dominantBaseline="middle"
-                transform={`rotate(${mid} ${x} ${y})`}
+                transform={`rotate(${mid - 90} ${x} ${y})`}
                 aria-hidden="true"
               >
                 {label}
@@ -80,6 +91,8 @@ export default function Wheel({ entries, weights, rotation, animate, ariaLabel, 
           })}
         </g>
         <circle cx={CX} cy={CY} r="10" fill="white" stroke="#334155" strokeWidth="2" />
+        {/* two-tone pointer stays readable on any background (cards, OBS scenes) */}
+        <polygon points="90,1 110,1 100,22" fill="white" stroke="#0f172a" strokeWidth="2.5" strokeLinejoin="round" />
       </svg>
     </div>
   )
