@@ -1,6 +1,6 @@
 export const messages = {
   de: {
-    appTitle: 'Glücksrad',
+    appTitle: 'Streamwheel',
     tagline: 'Das Glücksrad für deinen Stream: eigene Wahrscheinlichkeiten, Share-Link und OBS-Overlay.',
     overlay: 'OBS-Overlay',
     overlayTip:
@@ -51,7 +51,7 @@ export const messages = {
     switchLang: 'Switch to English',
   },
   en: {
-    appTitle: 'Wheel of Fortune',
+    appTitle: 'Streamwheel',
     tagline: 'The spin wheel for your stream: custom probabilities, share links and an OBS overlay.',
     overlay: 'OBS overlay',
     overlayTip:

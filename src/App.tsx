@@ -734,6 +734,22 @@ export default function App() {
             <FerrisWheel aria-hidden="true" className="h-4 w-4" />
             {t.appTitle}
           </span>
+          <a
+            href="https://github.com/ZSleyer/streamwheel"
+            target="_blank"
+            rel="noopener"
+            className="underline underline-offset-2 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fuchsia-600 dark:hover:text-slate-100"
+          >
+            GitHub
+          </a>
+          <a
+            href="https://www.gnu.org/licenses/agpl-3.0.html"
+            target="_blank"
+            rel="noopener"
+            className="underline underline-offset-2 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fuchsia-600 dark:hover:text-slate-100"
+          >
+            AGPL-3.0
+          </a>
           <span>© {year > 2026 ? `2026 - ${year}` : year} ZSleyer</span>
         </div>
       </footer>

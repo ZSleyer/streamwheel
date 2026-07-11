@@ -16,5 +16,7 @@ const csp = {
 }
 
 export default defineConfig({
+  // BASE_PATH is set by the GitHub Pages workflow (/streamwheel/), default is root.
+  base: process.env.BASE_PATH || '/',
   plugins: [react(), tailwindcss(), csp],
 })
