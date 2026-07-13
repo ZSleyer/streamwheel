@@ -319,7 +319,28 @@ export default function App() {
   // Native <dialog> gives us focus trap, Escape and backdrop for free.
   const dialogRef = useRef<HTMLDialogElement | null>(null)
   const openSettings = () => dialogRef.current?.showModal()
-  const closeSettings = () => dialogRef.current?.close()
+  // Animate the collapse while the dialog is still open (top-layer stays put, so
+  // Firefox animates too), then actually close once the transition finishes.
+  function closeSettings() {
+    const d = dialogRef.current
+    if (!d || !d.open || d.hasAttribute('data-closing')) return
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      d.close()
+      return
+    }
+    const done = () => {
+      d.removeEventListener('transitionend', onEnd)
+      clearTimeout(timer)
+      d.removeAttribute('data-closing')
+      d.close()
+    }
+    const onEnd = (ev: TransitionEvent) => {
+      if (ev.target === d && ev.propertyName === 'clip-path') done()
+    }
+    d.addEventListener('transitionend', onEnd)
+    const timer = window.setTimeout(done, 320)
+    d.setAttribute('data-closing', '')
+  }
   const obsRef = useRef<ObsConnection | null>(null)
   function toggleObs() {
     if (obsRef.current) {
@@ -623,6 +644,11 @@ export default function App() {
               <dialog
                 ref={dialogRef}
                 aria-labelledby="settings-title"
+                onCancel={(ev) => {
+                  // Escape fires cancel then closes instantly; reroute through the animated path.
+                  ev.preventDefault()
+                  closeSettings()
+                }}
                 onClick={(ev) => {
                   // A click landing on the dialog itself is a backdrop click (content sits in children).
                   if (ev.target === dialogRef.current) closeSettings()
