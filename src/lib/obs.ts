@@ -6,22 +6,23 @@ const XOR_KEY = new TextEncoder().encode('rad-obs-bookmark-k1')
 
 const xor = (data: Uint8Array) => data.map((b, i) => b ^ XOR_KEY[i % XOR_KEY.length])
 
-/** Pack OBS port + password into an obfuscated base64url blob for bookmark links. */
-export function packObsCreds(port: string, password: string): string {
-  const bytes = xor(new TextEncoder().encode(JSON.stringify({ p: port, w: password })))
+/** Pack OBS host + port + password into an obfuscated base64url blob for bookmark links. */
+export function packObsCreds(host: string, port: string, password: string): string {
+  const bytes = xor(new TextEncoder().encode(JSON.stringify({ h: host, p: port, w: password })))
   let bin = ''
   for (const b of bytes) bin += String.fromCharCode(b)
   return btoa(bin).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
 }
 
-/** Reverse of packObsCreds; null on any malformed input. */
-export function unpackObsCreds(blob: string): { port: string; password: string } | null {
+/** Reverse of packObsCreds; null on any malformed input. Old blobs without a host default to 127.0.0.1. */
+export function unpackObsCreds(blob: string): { host: string; port: string; password: string } | null {
   try {
     const bin = atob(blob.replaceAll('-', '+').replaceAll('_', '/'))
     const bytes = xor(Uint8Array.from(bin, (c) => c.charCodeAt(0)))
-    const { p, w } = JSON.parse(new TextDecoder().decode(bytes))
+    const { h, p, w } = JSON.parse(new TextDecoder().decode(bytes))
     if (typeof p !== 'string' || !/^\d{1,5}$/.test(p) || typeof w !== 'string') return null
-    return { port: p, password: w }
+    const host = typeof h === 'string' && h ? h : '127.0.0.1'
+    return { host, port: p, password: w }
   } catch {
     return null
   }
@@ -51,11 +52,12 @@ const obsAuth = async (password: string, salt: string, challenge: string) =>
  * obs-browser vendor request. Browser sources receive them as window CustomEvents.
  */
 export function connectObs(
+  host: string,
   port: string,
   password: string,
   onStatus: (s: ObsStatus) => void,
 ): ObsConnection {
-  const ws = new WebSocket(`ws://127.0.0.1:${encodeURIComponent(port)}`)
+  const ws = new WebSocket(`ws://${host}:${encodeURIComponent(port)}`)
   onStatus('connecting')
   let failed = false
   ws.onmessage = async (ev) => {

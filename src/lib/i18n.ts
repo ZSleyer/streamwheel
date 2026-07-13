@@ -8,7 +8,10 @@ export const messages = {
     obsHeading: 'OBS-Fernsteuerung',
     obsHint:
       'In OBS: Werkzeuge → WebSocket-Server-Einstellungen → Server aktivieren. Danach hier verbinden: „Drehen" und alle Änderungen steuern dann das Overlay in OBS.',
-    obsPort: 'OBS-WebSocket-Port',
+    obsHost: 'Host',
+    obsPort: 'Port',
+    stepUp: 'Erhöhen',
+    stepDown: 'Verringern',
     obsPassword: 'OBS-WebSocket-Passwort (falls gesetzt)',
     obsConnect: 'Mit OBS verbinden',
     obsDisconnect: 'Von OBS trennen',
@@ -59,7 +62,10 @@ export const messages = {
     obsHeading: 'OBS remote control',
     obsHint:
       'In OBS: Tools → WebSocket Server Settings → enable the server. Then connect here: "Spin" and all changes will drive the overlay inside OBS.',
-    obsPort: 'OBS WebSocket port',
+    obsHost: 'Host',
+    obsPort: 'Port',
+    stepUp: 'Increase',
+    stepDown: 'Decrease',
     obsPassword: 'OBS WebSocket password (if set)',
     obsConnect: 'Connect to OBS',
     obsDisconnect: 'Disconnect from OBS',

@@ -1,6 +1,8 @@
 import {
   Bookmark,
   Check,
+  ChevronDown,
+  ChevronUp,
   Dices,
   Eye,
   EyeOff,
@@ -88,6 +90,82 @@ const iconButtonClass =
   'text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 ' +
   'focus-visible:outline-fuchsia-600 disabled:cursor-not-allowed disabled:opacity-50 ' +
   'dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
+
+type NumberFieldProps = {
+  id: string
+  value: string
+  min: number
+  max: number
+  step?: number
+  placeholder?: string
+  inputMode?: 'numeric' | 'decimal'
+  incLabel: string
+  decLabel: string
+  onChange: (value: string) => void
+  'aria-describedby'?: string
+}
+
+/**
+ * Number input with custom stepper buttons replacing the browser default spinners.
+ * Buttons are 24px tall each (WCAG 2.5.8) inside a 48px-tall field; typing is passed
+ * through raw so the parent can apply its own masking.
+ */
+function NumberField({
+  id,
+  value,
+  min,
+  max,
+  step = 1,
+  placeholder,
+  inputMode = 'numeric',
+  incLabel,
+  decLabel,
+  onChange,
+  ...rest
+}: NumberFieldProps) {
+  const clamp = (n: number) => Math.min(max, Math.max(min, n))
+  const bump = (dir: 1 | -1) => {
+    const base = value === '' ? min : Number(value)
+    if (Number.isNaN(base)) return
+    onChange(String(clamp(base + dir * step)))
+  }
+  return (
+    <div className="relative">
+      <input
+        id={id}
+        type="number"
+        inputMode={inputMode}
+        min={min}
+        max={max}
+        step="any"
+        value={value}
+        placeholder={placeholder}
+        onChange={(ev) => onChange(ev.target.value)}
+        className={`${inputClass} no-spinner h-12 pr-9`}
+        aria-describedby={rest['aria-describedby']}
+      />
+      {/* Full input height so each 48/2=24px button meets WCAG 2.5.8 target size. */}
+      <div className="absolute inset-y-0 right-0 flex w-8 flex-col overflow-hidden rounded-r-xl border-l border-slate-300 dark:border-slate-600">
+        <button
+          type="button"
+          aria-label={incLabel}
+          onClick={() => bump(1)}
+          className="flex flex-1 items-center justify-center bg-white text-slate-700 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset--2 focus-visible:outline-fuchsia-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+        >
+          <ChevronUp aria-hidden="true" className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          aria-label={decLabel}
+          onClick={() => bump(-1)}
+          className="flex flex-1 items-center justify-center border-t border-slate-300 bg-white text-slate-700 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset--2 focus-visible:outline-fuchsia-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+        >
+          <ChevronDown aria-hidden="true" className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  )
+}
 
 /** Wheel-of-fortune app: entry editor, SVG wheel, share link, OBS overlay mode. */
 export default function App() {
@@ -199,9 +277,25 @@ export default function App() {
   // talk to the local obs-websocket server, which forwards events to browser sources.
   const [obsStatus, setObsStatus] = useState<ObsStatus>('disconnected')
   // Prefilled from bookmark links, see the bookmark button.
+  const [obsHost, setObsHost] = useState(() => {
+    if (bookmarkCreds) return bookmarkCreds.host
+    try {
+      return localStorage.getItem('rad:obs-host') ?? '127.0.0.1'
+    } catch {
+      return '127.0.0.1'
+    }
+  })
   const [obsPort, setObsPort] = useState(bookmarkCreds?.port ?? '4455')
   const [obsPassword, setObsPassword] = useState(bookmarkCreds?.password ?? '')
   const [showObsPassword, setShowObsPassword] = useState(false)
+  useEffect(() => {
+    if (isOverlay) return
+    try {
+      localStorage.setItem('rad:obs-host', obsHost)
+    } catch {
+      // best effort
+    }
+  }, [obsHost])
   const [bookmarkCopied, setBookmarkCopied] = useState(false)
   // Native <dialog> gives us focus trap, Escape and backdrop for free.
   const dialogRef = useRef<HTMLDialogElement | null>(null)
@@ -215,7 +309,7 @@ export default function App() {
       setObsStatus('disconnected')
       return
     }
-    obsRef.current = connectObs(obsPort, obsPassword, (s) => {
+    obsRef.current = connectObs(obsHost, obsPort, obsPassword, (s) => {
       setObsStatus(s)
       if (s === 'connected') {
         obsRef.current?.emit('rad-wheel', { data: encodeWheel(entriesRef.current) })
@@ -237,7 +331,7 @@ export default function App() {
   }, [])
 
   async function copyObsBookmark() {
-    const url = `${location.origin}${location.pathname}?k=${packObsCreds(obsPort, obsPassword)}#${encodeWheel(entries)}`
+    const url = `${location.origin}${location.pathname}?k=${packObsCreds(obsHost, obsPort, obsPassword)}#${encodeWheel(entries)}`
     try {
       await navigator.clipboard.writeText(url)
       setBookmarkCopied(true)
@@ -555,32 +649,50 @@ export default function App() {
                     <label htmlFor="overlay-hide" className="mb-1 block text-sm">
                       {t.overlayHide}
                     </label>
-                    <input
-                      id="overlay-hide"
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      max={3600}
-                      value={hideSecs}
-                      onChange={(ev) => setHideSecs(ev.target.value.replace(/\D/g, '').slice(0, 4))}
-                      className={`${inputClass} w-28`}
-                    />
+                    <div className="w-28">
+                      <NumberField
+                        id="overlay-hide"
+                        min={0}
+                        max={3600}
+                        value={hideSecs}
+                        incLabel={t.stepUp}
+                        decLabel={t.stepDown}
+                        onChange={(v) => setHideSecs(v.replace(/\D/g, '').slice(0, 4))}
+                      />
+                    </div>
                   </div>
                   <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">{t.obsHint}</p>
                   <div className="flex flex-wrap items-end gap-3">
-                    <div className="w-24">
-                      <label htmlFor="obs-port" className="mb-1 block text-sm">
-                        {t.obsPort}
-                      </label>
-                      <input
-                        id="obs-port"
-                        type="text"
-                        inputMode="numeric"
-                        value={obsPort}
-                        disabled={obsStatus === 'connected' || obsStatus === 'connecting'}
-                        onChange={(ev) => setObsPort(ev.target.value.replace(/\D/g, '').slice(0, 5))}
-                        className={inputClass}
-                      />
+                    <div className="flex grow gap-3">
+                      <div className="grow">
+                        <label htmlFor="obs-host" className="mb-1 block text-sm">
+                          {t.obsHost}
+                        </label>
+                        <input
+                          id="obs-host"
+                          type="text"
+                          inputMode="url"
+                          autoComplete="off"
+                          value={obsHost}
+                          disabled={obsStatus === 'connected' || obsStatus === 'connecting'}
+                          onChange={(ev) => setObsHost(ev.target.value.trim())}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div className="w-24 shrink-0">
+                        <label htmlFor="obs-port" className="mb-1 block text-sm">
+                          {t.obsPort}
+                        </label>
+                        <input
+                          id="obs-port"
+                          type="text"
+                          inputMode="numeric"
+                          value={obsPort}
+                          disabled={obsStatus === 'connected' || obsStatus === 'connecting'}
+                          onChange={(ev) => setObsPort(ev.target.value.replace(/\D/g, '').slice(0, 5))}
+                          className={inputClass}
+                        />
+                      </div>
                     </div>
                     <div className="min-w-40 grow">
                       <label htmlFor="obs-password" className="mb-1 block text-sm">
@@ -664,7 +776,7 @@ export default function App() {
                       type="color"
                       value={e.color ?? colorOf(i)}
                       onChange={(ev) => update(e.id, { color: ev.target.value })}
-                      className="h-10 w-10 cursor-pointer rounded-xl border border-slate-300 bg-white p-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fuchsia-600 dark:border-slate-600 dark:bg-slate-950"
+                      className="h-10 w-10 cursor-pointer overflow-hidden rounded-xl border border-slate-300 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fuchsia-600 dark:border-slate-600"
                     />
                   </div>
                   <div className="grow">
@@ -685,18 +797,17 @@ export default function App() {
                     <label htmlFor={`percent-${e.id}`} className="sr-only">
                       {t.entryPercent}, {t.entryLabel} {i + 1}
                     </label>
-                    <input
+                    <NumberField
                       id={`percent-${e.id}`}
-                      type="number"
                       inputMode="decimal"
                       min={0}
                       max={100}
-                      step="any"
-                      value={e.percent ?? ''}
+                      value={e.percent != null ? String(e.percent) : ''}
                       placeholder={t.auto}
+                      incLabel={t.stepUp}
+                      decLabel={t.stepDown}
                       aria-describedby={fixedSum > 100 ? 'percent-warning' : undefined}
-                      onChange={(ev) => setPercent(e.id, ev.target.value)}
-                      className={inputClass}
+                      onChange={(v) => setPercent(e.id, v)}
                     />
                     <p className="mt-0.5 text-xs text-slate-700 dark:text-slate-300">
                       = {weights[i].toFixed(1)} %

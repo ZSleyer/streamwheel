@@ -1,5 +1,34 @@
 @import "tailwindcss";
 
+/* Theme native controls (color picker popup, dropdowns) to match the OS light/dark preference. */
+:root {
+  color-scheme: light dark;
+}
+
+/* Make the native color swatch fill its rounded box, no inner padding border. */
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 0.5rem;
+}
+input[type="color"]::-moz-color-swatch {
+  border: none;
+  border-radius: 0.5rem;
+}
+
+/* Remove native number spinners; replaced by custom stepper buttons. */
+input[type="number"].no-spinner::-webkit-inner-spin-button,
+input[type="number"].no-spinner::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"].no-spinner {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 @keyframes confetti-fall {
   from {
     /* start well offscreen so the slow ease-in start is not visible */
