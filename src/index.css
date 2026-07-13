@@ -1,21 +1,135 @@
 @import "tailwindcss";
 
-/* Theme native controls (color picker popup, dropdowns) to match the OS light/dark preference. */
+/*
+ * Tempest design tokens (ported from the Encounty design system). Dark-first,
+ * with the light palette applied via the OS preference so no theme toggle or JS
+ * is needed. All chrome reads these variables; the SVG wheel is independent.
+ */
 :root {
-  color-scheme: light dark;
+  --bg-primary: #0d1117;
+  --bg-secondary: #131922;
+  --bg-card: #161e28;
+  --bg-hover: #1e2836;
+  --accent-blue: #a685f0;
+  --accent-green: #34d67a;
+  --accent-yellow: #ffb020;
+  --accent-red: #f05050;
+  --accent-purple: #b970ff;
+  --border-subtle: #2a3644;
+  --border-active: var(--accent-blue);
+  --text-primary: #eef3f8;
+  --text-secondary: #b7c5d3;
+  --text-muted: #8fa3b5;
+  --text-faint: #7a8ea0;
+  color-scheme: dark;
 }
 
-/* Make the native color swatch fill its rounded box, no inner padding border. */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg-primary: #eef1f4;
+    --bg-secondary: #f8fafb;
+    --bg-card: #ffffff;
+    --bg-hover: #e2e7ed;
+    --accent-blue: #6d28d9;
+    --accent-green: #15803d;
+    --accent-yellow: #b45309;
+    --accent-red: #b91c1c;
+    --accent-purple: #6d28d9;
+    --border-subtle: #c3ccd6;
+    --border-active: var(--accent-blue);
+    --text-primary: #0a1628;
+    --text-secondary: #2d4059;
+    --text-muted: #4a5f73;
+    --text-faint: #637080;
+    color-scheme: light;
+  }
+}
+
+body {
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+}
+
+/* Global focus indicator (WCAG 2.2 AA: visible focus in both themes). */
+:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
+/* Panel with Tempest corner brackets. */
+.t-panel {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0;
+}
+.t-panel::before,
+.t-panel::after {
+  content: "";
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+}
+.t-panel::before {
+  top: 0;
+  left: 0;
+  border-top: 1px solid var(--panel-bracket, color-mix(in srgb, var(--accent-blue) 55%, transparent));
+  border-left: 1px solid var(--panel-bracket, color-mix(in srgb, var(--accent-blue) 55%, transparent));
+}
+.t-panel::after {
+  bottom: 0;
+  right: 0;
+  border-bottom: 1px solid var(--panel-bracket, color-mix(in srgb, var(--accent-blue) 55%, transparent));
+  border-right: 1px solid var(--panel-bracket, color-mix(in srgb, var(--accent-blue) 55%, transparent));
+}
+/* Destructive dialogs: red brackets carry the severity. */
+.t-panel--danger {
+  --panel-bracket: var(--accent-red);
+}
+
+/* Micro label chip: uppercase title-card vocabulary. */
+.t-label {
+  display: inline-block;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 10px;
+  font-weight: 600;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0;
+  padding: 1px 6px;
+  color: var(--text-muted);
+}
+.t-label--accent {
+  border-color: color-mix(in srgb, var(--accent-blue) 55%, transparent);
+  color: var(--accent-blue);
+}
+
+/* Corner cuts for primary buttons and compact accent chips. */
+.t-cut {
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
+  border-radius: 0;
+}
+.t-cut-sm {
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%);
+  border-radius: 0;
+}
+/* The clip-path crops a normal outline, so use a layered box-shadow ring instead. */
+.t-cut:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px var(--accent-blue);
+}
+
+/* Make the native color swatch fill its box, no inner padding or rounding. */
 input[type="color"]::-webkit-color-swatch-wrapper {
   padding: 0;
 }
 input[type="color"]::-webkit-color-swatch {
   border: none;
-  border-radius: 0.5rem;
+  border-radius: 0;
 }
 input[type="color"]::-moz-color-swatch {
   border: none;
-  border-radius: 0.5rem;
+  border-radius: 0;
 }
 
 /* Remove native number spinners; replaced by custom stepper buttons. */

@@ -40,7 +40,18 @@ import {
 
 const newEntry = (label: string): Entry => ({ id: crypto.randomUUID(), label })
 
-const defaultEntries = () => ['Pizza', 'Pasta', 'Sushi', 'Tacos'].map(newEntry)
+/** Localized starter wheel with suggested weights, shown until the user edits it. */
+const defaultEntries = (lang: Lang): Entry[] => [
+  { ...newEntry(messages[lang].defCook), percent: 10 },
+  { ...newEntry(messages[lang].defOrder), percent: 50 },
+  { ...newEntry(messages[lang].defStarve), percent: 5 },
+]
+
+/** True when the wheel is still the untouched default set for `lang` (labels + weights, ignoring ids/colors). */
+const matchesDefaults = (entries: Entry[], lang: Lang): boolean => {
+  const d = defaultEntries(lang)
+  return entries.length === d.length && entries.every((e, i) => e.label === d[i].label && e.percent === d[i].percent)
+}
 
 /** Overlay mode renders only the wheel on a transparent background (OBS browser source). */
 const isOverlay = new URLSearchParams(window.location.search).has('overlay')
@@ -59,37 +70,37 @@ function initialPointerPos(): PointerPos {
   } catch {
     // fall through to default
   }
-  return 'top'
+  return 'left'
 }
 
 /** URL hash wins over localStorage, both validated by decodeWheel. */
-function initialEntries(): Entry[] {
+function initialEntries(lang: Lang): Entry[] {
   const hash = window.location.hash.slice(1)
   if (hash) {
     const fromHash = decodeWheel(hash)
     if (fromHash) return fromHash
   }
-  return loadWheel() ?? defaultEntries()
+  return loadWheel() ?? defaultEntries(lang)
 }
 
 const inputClass =
-  'w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 ' +
-  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fuchsia-600 ' +
-  'dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100'
+  'w-full border border-[var(--border-subtle)] bg-[var(--bg-secondary)] px-3 py-2 text-[var(--text-primary)] ' +
+  'focus-visible:border-[var(--accent-blue)] focus-visible:outline-2 focus-visible:outline-offset-2 ' +
+  'focus-visible:outline-[var(--accent-blue)]'
 
 const buttonClass =
-  'rounded-xl px-4 py-2 font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 ' +
-  'focus-visible:outline-fuchsia-600 disabled:cursor-not-allowed disabled:opacity-50'
+  'px-4 py-2 font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 ' +
+  'focus-visible:outline-[var(--accent-blue)] disabled:cursor-not-allowed disabled:opacity-50'
 
-const primaryClass = `${buttonClass} bg-linear-to-r from-indigo-600 to-fuchsia-600 text-white hover:brightness-110`
+const primaryClass = `${buttonClass} t-cut bg-[var(--accent-blue)] text-[var(--bg-primary)] hover:brightness-110`
 
-const secondaryClass = `${buttonClass} border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700`
+const secondaryClass = `${buttonClass} border border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)]`
 
 const iconButtonClass =
-  'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white ' +
-  'text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 ' +
-  'focus-visible:outline-fuchsia-600 disabled:cursor-not-allowed disabled:opacity-50 ' +
-  'dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'
+  'flex h-10 w-10 shrink-0 items-center justify-center border border-[var(--border-subtle)] bg-[var(--bg-card)] ' +
+  'text-[var(--text-secondary)] transition hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] ' +
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-blue)] ' +
+  'disabled:cursor-not-allowed disabled:opacity-50'
 
 type NumberFieldProps = {
   id: string
@@ -145,12 +156,12 @@ function NumberField({
         aria-describedby={rest['aria-describedby']}
       />
       {/* Full input height so each 48/2=24px button meets WCAG 2.5.8 target size. */}
-      <div className="absolute inset-y-0 right-0 flex w-8 flex-col overflow-hidden rounded-r-xl border-l border-slate-300 dark:border-slate-600">
+      <div className="absolute inset-y-0 right-0 flex w-8 flex-col overflow-hidden border-l border-[var(--border-subtle)]">
         <button
           type="button"
           aria-label={incLabel}
           onClick={() => bump(1)}
-          className="flex flex-1 items-center justify-center bg-white text-slate-700 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset--2 focus-visible:outline-fuchsia-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+          className="flex flex-1 items-center justify-center bg-[var(--bg-card)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] focus-visible:outline-2 focus-visible:outline-offset--2 focus-visible:outline-[var(--accent-blue)]"
         >
           <ChevronUp aria-hidden="true" className="h-4 w-4" />
         </button>
@@ -158,7 +169,7 @@ function NumberField({
           type="button"
           aria-label={decLabel}
           onClick={() => bump(-1)}
-          className="flex flex-1 items-center justify-center border-t border-slate-300 bg-white text-slate-700 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset--2 focus-visible:outline-fuchsia-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+          className="flex flex-1 items-center justify-center border-t border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] focus-visible:outline-2 focus-visible:outline-offset--2 focus-visible:outline-[var(--accent-blue)]"
         >
           <ChevronDown aria-hidden="true" className="h-4 w-4" />
         </button>
@@ -173,7 +184,15 @@ export default function App() {
   const t = messages[lang]
   useEffect(() => persistLang(lang), [lang])
 
-  const [entries, setEntries] = useState<Entry[]>(initialEntries)
+  // Re-localize the starter wheel on language switch, but only while it is still untouched.
+  const prevLang = useRef(lang)
+  useEffect(() => {
+    const from = prevLang.current
+    prevLang.current = lang
+    if (from !== lang) setEntries((es) => (matchesDefaults(es, from) ? defaultEntries(lang) : es))
+  }, [lang])
+
+  const [entries, setEntries] = useState<Entry[]>(() => initialEntries(lang))
   const [rotation, setRotation] = useState(0)
   const [spinning, setSpinning] = useState(false)
   const [winner, setWinner] = useState<string | null>(null)
@@ -454,7 +473,7 @@ export default function App() {
       // best effort
     }
   }, [hideSecs])
-  const overlayHref = `?overlay${Number(hideSecs) > 0 ? `&hide=${Number(hideSecs)}` : ''}${pointerPos !== 'top' ? `&pointer=${pointerPos}` : ''}#${encodeWheel(entries)}`
+  const overlayHref = `?overlay${Number(hideSecs) > 0 ? `&hide=${Number(hideSecs)}` : ''}${pointerPos !== 'left' ? `&pointer=${pointerPos}` : ''}#${encodeWheel(entries)}`
 
   const wheelAlt = `${t.wheelAlt} ${entries.map((e) => e.label || '?').join(', ')}`
   const year = new Date().getFullYear()
@@ -470,7 +489,7 @@ export default function App() {
           onClick={() => spinTo(pickWinner(weights))}
           disabled={!canSpin}
           aria-label={t.spin}
-          className="w-full max-w-[min(88vw,80vh)] rounded-full focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-fuchsia-500"
+          className="w-full max-w-[min(88vw,80vh)] rounded-full focus-visible:outline-4 focus-visible:outline-offset-4 focus-visible:outline-[var(--accent-blue)]"
         >
           <Wheel
             entries={entries}
@@ -502,18 +521,16 @@ export default function App() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-linear-to-b from-slate-100 via-indigo-100 to-slate-100 text-slate-900 dark:from-slate-950 dark:via-indigo-950 dark:to-slate-950 dark:text-slate-100">
+    <div className="flex min-h-screen flex-col bg-[var(--bg-primary)] text-[var(--text-primary)]">
       {burst && <Confetti />}
       <div className="mx-auto w-full max-w-6xl grow px-4 py-8">
         <header className="mb-8 flex items-start justify-between gap-4">
           <div>
-            <h1 className="flex items-center gap-3 text-4xl font-extrabold tracking-tight">
-              <FerrisWheel aria-hidden="true" className="h-9 w-9 shrink-0 text-fuchsia-600 dark:text-fuchsia-400" />
-              <span className="bg-linear-to-r from-indigo-600 to-fuchsia-600 bg-clip-text text-transparent dark:from-indigo-400 dark:to-fuchsia-400">
-                {t.appTitle}
-              </span>
+            <h1 className="flex items-center gap-3 text-4xl font-extrabold tracking-tight uppercase">
+              <FerrisWheel aria-hidden="true" className="h-9 w-9 shrink-0 text-[var(--accent-blue)]" />
+              <span className="text-[var(--accent-blue)]">{t.appTitle}</span>
             </h1>
-            <p className="mt-2 max-w-xl text-slate-700 dark:text-slate-300">{t.tagline}</p>
+            <p className="mt-2 max-w-xl text-[var(--text-secondary)]">{t.tagline}</p>
           </div>
           <div className="flex shrink-0 gap-2">
             <button type="button" onClick={openSettings} aria-label={t.openSettings} className={iconButtonClass}>
@@ -547,7 +564,7 @@ export default function App() {
                 type="button"
                 onClick={spin}
                 disabled={!canSpin}
-                className={`${primaryClass} flex w-full max-w-sm items-center justify-center gap-2 py-3 text-lg shadow-lg shadow-fuchsia-600/20`}
+                className={`${primaryClass} flex w-full max-w-sm items-center justify-center gap-2 py-3 text-lg`}
               >
                 <Dices aria-hidden="true" className="h-5 w-5" />
                 {spinning ? t.spinning : t.spin}
@@ -556,7 +573,7 @@ export default function App() {
               <p aria-live="polite" className="min-h-8 max-w-full text-center text-2xl font-bold wrap-break-word">
                 {winner !== null && (
                   <>
-                    <PartyPopper aria-hidden="true" className="mr-2 inline h-6 w-6 text-fuchsia-600 dark:text-fuchsia-400" />
+                    <PartyPopper aria-hidden="true" className="mr-2 inline h-6 w-6 text-[var(--accent-blue)]" />
                     {t.winner}: {winner || '?'}
                   </>
                 )}
@@ -576,17 +593,17 @@ export default function App() {
                   {t.overlay}
                 </a>
               </div>
-              <p className="flex flex-wrap items-center justify-center gap-x-2 text-sm text-slate-600 dark:text-slate-400">
+              <p className="flex flex-wrap items-center justify-center gap-x-2 text-sm text-[var(--text-muted)]">
                 <span aria-live="polite">
                   {obsStatus === 'connecting' && t.obsStatusConnecting}
                   {obsStatus === 'connected' && (
-                    <span className="text-emerald-700 dark:text-emerald-400">
+                    <span className="text-[var(--accent-green)]">
                       <Check aria-hidden="true" className="mr-1 inline h-4 w-4" />
                       {t.obsStatusConnected}
                     </span>
                   )}
                   {obsStatus === 'error' && (
-                    <span className="text-red-700 dark:text-red-400">
+                    <span className="text-[var(--accent-red)]">
                       <TriangleAlert aria-hidden="true" className="mr-1 inline h-4 w-4" />
                       {t.obsBadgeError}
                     </span>
@@ -596,7 +613,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={openSettings}
-                  className="inline-flex items-center gap-1 font-medium text-indigo-700 underline underline-offset-2 hover:text-indigo-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fuchsia-600 dark:text-indigo-300 dark:hover:text-indigo-100"
+                  className="inline-flex items-center gap-1 font-medium text-[var(--accent-blue)] underline underline-offset-2 hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-blue)]"
                 >
                   <Settings aria-hidden="true" className="h-4 w-4" />
                   {t.settings}
@@ -606,10 +623,10 @@ export default function App() {
               <dialog
                 ref={dialogRef}
                 aria-labelledby="settings-title"
-                className="m-auto w-[calc(100%-2rem)] max-w-lg rounded-3xl bg-white p-6 text-slate-900 shadow-2xl backdrop:bg-black/60 dark:bg-slate-900 dark:text-slate-100"
+                className="t-panel m-auto w-[calc(100%-2rem)] max-w-2xl p-6 text-[var(--text-primary)] shadow-2xl backdrop:bg-black/60"
               >
                 <div className="mb-4 flex items-center justify-between gap-4">
-                  <h2 id="settings-title" className="flex items-center gap-2 text-xl font-semibold">
+                  <h2 id="settings-title" className="flex items-center gap-2 text-xl font-semibold uppercase tracking-wide">
                     <Settings aria-hidden="true" className="h-5 w-5" />
                     {t.settings}
                   </h2>
@@ -617,134 +634,153 @@ export default function App() {
                     <X aria-hidden="true" className="h-5 w-5" />
                   </button>
                 </div>
-                <div>
-                  <label className="mb-3 flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                    <input
-                      type="checkbox"
-                      checked={confettiOn}
-                      onChange={(ev) => setConfettiOn(ev.target.checked)}
-                      className="h-5 w-5 accent-fuchsia-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fuchsia-600"
-                    />
-                    <Sparkles aria-hidden="true" className="h-5 w-5" />
-                    {t.confetti}
-                  </label>
-                  <div className="mb-3">
-                    <label htmlFor="pointer-pos" className="mb-1 block text-sm">
-                      {t.pointerPos}
-                    </label>
-                    <select
-                      id="pointer-pos"
-                      value={pointerPos}
-                      onChange={(ev) => setPointerPos(ev.target.value as PointerPos)}
-                      className={`${inputClass} w-40`}
-                    >
-                      <option value="top">{t.posTop}</option>
-                      <option value="right">{t.posRight}</option>
-                      <option value="bottom">{t.posBottom}</option>
-                      <option value="left">{t.posLeft}</option>
-                    </select>
-                  </div>
-                  <p className="mb-2 text-sm text-slate-600 dark:text-slate-400">{t.overlayTip}</p>
-                  <div className="mb-3">
-                    <label htmlFor="overlay-hide" className="mb-1 block text-sm">
-                      {t.overlayHide}
-                    </label>
-                    <div className="w-28">
-                      <NumberField
-                        id="overlay-hide"
-                        min={0}
-                        max={3600}
-                        value={hideSecs}
-                        incLabel={t.stepUp}
-                        decLabel={t.stepDown}
-                        onChange={(v) => setHideSecs(v.replace(/\D/g, '').slice(0, 4))}
-                      />
-                    </div>
-                  </div>
-                  <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">{t.obsHint}</p>
-                  <div className="flex flex-wrap items-end gap-3">
-                    <div className="flex grow gap-3">
-                      <div className="grow">
-                        <label htmlFor="obs-host" className="mb-1 block text-sm">
-                          {t.obsHost}
-                        </label>
+                <div className="flex flex-col gap-6">
+                  {/* Section: display preferences, the simple everyday knobs. */}
+                  <section className="flex flex-col gap-3">
+                    <p className="t-label t-label--accent self-start">{t.secDisplay}</p>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
                         <input
-                          id="obs-host"
-                          type="text"
-                          inputMode="url"
-                          autoComplete="off"
-                          value={obsHost}
-                          disabled={obsStatus === 'connected' || obsStatus === 'connecting'}
-                          onChange={(ev) => setObsHost(ev.target.value.trim())}
-                          className={inputClass}
+                          type="checkbox"
+                          checked={confettiOn}
+                          onChange={(ev) => setConfettiOn(ev.target.checked)}
+                          className="h-5 w-5 accent-[var(--accent-blue)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-blue)]"
                         />
-                      </div>
-                      <div className="w-24 shrink-0">
-                        <label htmlFor="obs-port" className="mb-1 block text-sm">
-                          {t.obsPort}
-                        </label>
-                        <input
-                          id="obs-port"
-                          type="text"
-                          inputMode="numeric"
-                          value={obsPort}
-                          disabled={obsStatus === 'connected' || obsStatus === 'connecting'}
-                          onChange={(ev) => setObsPort(ev.target.value.replace(/\D/g, '').slice(0, 5))}
-                          className={inputClass}
-                        />
-                      </div>
-                    </div>
-                    <div className="min-w-40 grow">
-                      <label htmlFor="obs-password" className="mb-1 block text-sm">
-                        {t.obsPassword}
+                        <Sparkles aria-hidden="true" className="h-5 w-5" />
+                        {t.confetti}
                       </label>
-                      <div className="relative">
-                        <input
-                          id="obs-password"
-                          type={showObsPassword ? 'text' : 'password'}
-                          autoComplete="off"
-                          value={obsPassword}
-                          disabled={obsStatus === 'connected' || obsStatus === 'connecting'}
-                          onChange={(ev) => setObsPassword(ev.target.value)}
-                          className={`${inputClass} pr-11`}
+                      <div>
+                        <label htmlFor="pointer-pos" className="mb-1 block text-sm">
+                          {t.pointerPos}
+                        </label>
+                        <select
+                          id="pointer-pos"
+                          value={pointerPos}
+                          onChange={(ev) => setPointerPos(ev.target.value as PointerPos)}
+                          className={inputClass}
+                        >
+                          <option value="top">{t.posTop}</option>
+                          <option value="right">{t.posRight}</option>
+                          <option value="bottom">{t.posBottom}</option>
+                          <option value="left">{t.posLeft}</option>
+                        </select>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* Section: overlay embedding, one tip plus the idle-hide field. */}
+                  <section className="flex flex-col gap-3 border-t border-[var(--border-subtle)] pt-5">
+                    <p className="t-label t-label--accent self-start">{t.secOverlay}</p>
+                    <div>
+                      <label htmlFor="overlay-hide" className="mb-1 block text-sm">
+                        {t.overlayHide}
+                      </label>
+                      <div className="w-28">
+                        <NumberField
+                          id="overlay-hide"
+                          min={0}
+                          max={3600}
+                          value={hideSecs}
+                          incLabel={t.stepUp}
+                          decLabel={t.stepDown}
+                          onChange={(v) => setHideSecs(v.replace(/\D/g, '').slice(0, 4))}
                         />
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* Section: OBS remote control, the primary way to drive the overlay live. */}
+                  <section className="flex flex-col gap-3 border-t border-[var(--border-subtle)] pt-5">
+                    <p className="t-label t-label--accent self-start">{t.obsHeading}</p>
+                    <div className="flex flex-col gap-3">
+                      <p className="text-sm text-[var(--text-muted)]">{t.obsHint}</p>
+                      <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                        <div className="flex gap-3">
+                          <div className="grow">
+                            <label htmlFor="obs-host" className="mb-1 block text-sm">
+                              {t.obsHost}
+                            </label>
+                            <input
+                              id="obs-host"
+                              type="text"
+                              inputMode="url"
+                              autoComplete="off"
+                              value={obsHost}
+                              disabled={obsStatus === 'connected' || obsStatus === 'connecting'}
+                              onChange={(ev) => setObsHost(ev.target.value.trim())}
+                              className={inputClass}
+                            />
+                          </div>
+                          <div className="w-24 shrink-0">
+                            <label htmlFor="obs-port" className="mb-1 block text-sm">
+                              {t.obsPort}
+                            </label>
+                            <input
+                              id="obs-port"
+                              type="text"
+                              inputMode="numeric"
+                              value={obsPort}
+                              disabled={obsStatus === 'connected' || obsStatus === 'connecting'}
+                              onChange={(ev) => setObsPort(ev.target.value.replace(/\D/g, '').slice(0, 5))}
+                              className={inputClass}
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label htmlFor="obs-password" className="mb-1 block text-sm">
+                            {t.obsPassword}
+                          </label>
+                          <div className="relative">
+                            <input
+                              id="obs-password"
+                              type={showObsPassword ? 'text' : 'password'}
+                              autoComplete="off"
+                              value={obsPassword}
+                              disabled={obsStatus === 'connected' || obsStatus === 'connecting'}
+                              onChange={(ev) => setObsPassword(ev.target.value)}
+                              className={`${inputClass} pr-11`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowObsPassword((s) => !s)}
+                              aria-label={showObsPassword ? t.hidePassword : t.showPassword}
+                              aria-pressed={showObsPassword}
+                              className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] focus-visible:outline-2 focus-visible:outline-offset--2 focus-visible:outline-[var(--accent-blue)]"
+                            >
+                              {showObsPassword ? (
+                                <EyeOff aria-hidden="true" className="h-5 w-5" />
+                              ) : (
+                                <Eye aria-hidden="true" className="h-5 w-5" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button type="button" onClick={toggleObs} className={secondaryClass}>
+                          {obsStatus === 'connected' || obsStatus === 'connecting' ? t.obsDisconnect : t.obsConnect}
+                        </button>
                         <button
                           type="button"
-                          onClick={() => setShowObsPassword((s) => !s)}
-                          aria-label={showObsPassword ? t.hidePassword : t.showPassword}
-                          aria-pressed={showObsPassword}
-                          className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-xl text-slate-600 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset--2 focus-visible:outline-fuchsia-600 dark:text-slate-400 dark:hover:text-slate-100"
+                          onClick={copyObsBookmark}
+                          className={`${secondaryClass} flex items-center gap-2`}
                         >
-                          {showObsPassword ? (
-                            <EyeOff aria-hidden="true" className="h-5 w-5" />
+                          {bookmarkCopied ? (
+                            <Check aria-hidden="true" className="h-5 w-5" />
                           ) : (
-                            <Eye aria-hidden="true" className="h-5 w-5" />
+                            <Bookmark aria-hidden="true" className="h-5 w-5" />
                           )}
+                          {bookmarkCopied ? t.copied : t.obsBookmark}
                         </button>
                       </div>
+                      <p aria-live="polite" className="min-h-5 text-sm">
+                        {obsStatus === 'error' && (
+                          <span className="text-[var(--accent-red)]">{t.obsStatusError}</span>
+                        )}
+                      </p>
+                      <p className="text-sm text-[var(--text-muted)]">{t.obsBookmarkHint}</p>
                     </div>
-                    <button type="button" onClick={toggleObs} className={secondaryClass}>
-                      {obsStatus === 'connected' || obsStatus === 'connecting' ? t.obsDisconnect : t.obsConnect}
-                    </button>
-                  </div>
-                  <p aria-live="polite" className="mt-2 min-h-5 text-sm">
-                    {obsStatus === 'error' && (
-                      <span className="text-red-700 dark:text-red-400">{t.obsStatusError}</span>
-                    )}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={copyObsBookmark}
-                    className={`${secondaryClass} flex items-center gap-2 text-sm`}
-                  >
-                    {bookmarkCopied ? (
-                      <Check aria-hidden="true" className="h-5 w-5" />
-                    ) : (
-                      <Bookmark aria-hidden="true" className="h-5 w-5" />
-                    )}
-                    {bookmarkCopied ? t.copied : t.obsBookmark}
-                  </button>
-                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">{t.obsBookmarkHint}</p>
+                  </section>
                 </div>
               </dialog>
             </div>
@@ -752,13 +788,13 @@ export default function App() {
 
           <section
             aria-label={t.entries}
-            className="rounded-3xl bg-white p-6 shadow-xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-white/10"
+            className="t-panel p-6 shadow-xl"
           >
-            <h2 className="mb-4 text-xl font-semibold">{t.entries}</h2>
+            <h2 className="mb-4 text-xl font-semibold uppercase tracking-wide">{t.entries}</h2>
             {fixedSum > 100 && (
               <p
                 id="percent-warning"
-                className="mb-4 rounded-xl border border-amber-600 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200"
+                className="mb-4 border border-[var(--accent-yellow)] bg-[color-mix(in_srgb,var(--accent-yellow)_12%,transparent)] px-3 py-2 text-sm text-[var(--text-primary)]"
               >
                 <TriangleAlert aria-hidden="true" className="mr-1 inline h-5 w-5" />
                 {t.warnOver100}
@@ -776,7 +812,7 @@ export default function App() {
                       type="color"
                       value={e.color ?? colorOf(i)}
                       onChange={(ev) => update(e.id, { color: ev.target.value })}
-                      className="h-10 w-10 cursor-pointer overflow-hidden rounded-xl border border-slate-300 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fuchsia-600 dark:border-slate-600"
+                      className="h-10 w-10 cursor-pointer overflow-hidden border border-[var(--border-subtle)] bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-blue)]"
                     />
                   </div>
                   <div className="grow">
@@ -803,15 +839,12 @@ export default function App() {
                       min={0}
                       max={100}
                       value={e.percent != null ? String(e.percent) : ''}
-                      placeholder={t.auto}
+                      placeholder={`${weights[i].toFixed(1)} %`}
                       incLabel={t.stepUp}
                       decLabel={t.stepDown}
                       aria-describedby={fixedSum > 100 ? 'percent-warning' : undefined}
                       onChange={(v) => setPercent(e.id, v)}
                     />
-                    <p className="mt-0.5 text-xs text-slate-700 dark:text-slate-300">
-                      = {weights[i].toFixed(1)} %
-                    </p>
                   </div>
                   <button
                     type="button"
@@ -839,8 +872,8 @@ export default function App() {
         </main>
       </div>
 
-      <footer className="mt-10 border-t border-slate-300 bg-white/60 py-6 dark:border-slate-800 dark:bg-slate-950/60">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 text-sm text-slate-600 dark:text-slate-400">
+      <footer className="mt-10 border-t border-[var(--border-subtle)] bg-[var(--bg-secondary)] py-6">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 text-sm text-[var(--text-muted)]">
           <span className="flex items-center gap-2">
             <FerrisWheel aria-hidden="true" className="h-4 w-4" />
             {t.appTitle}
@@ -849,7 +882,7 @@ export default function App() {
             href="https://github.com/ZSleyer/streamwheel"
             target="_blank"
             rel="noopener"
-            className="underline underline-offset-2 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fuchsia-600 dark:hover:text-slate-100"
+            className="underline underline-offset-2 hover:text-[var(--text-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-blue)]"
           >
             GitHub
           </a>
@@ -857,7 +890,7 @@ export default function App() {
             href="https://www.gnu.org/licenses/agpl-3.0.html"
             target="_blank"
             rel="noopener"
-            className="underline underline-offset-2 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fuchsia-600 dark:hover:text-slate-100"
+            className="underline underline-offset-2 hover:text-[var(--text-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-blue)]"
           >
             AGPL-3.0
           </a>

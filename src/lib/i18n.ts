@@ -2,12 +2,15 @@ export const messages = {
   de: {
     appTitle: 'Streamwheel',
     tagline: 'Das Glücksrad für deinen Stream: eigene Wahrscheinlichkeiten, Share-Link und OBS-Overlay.',
+    defCook: 'Selber kochen',
+    defOrder: 'Essen bestellen',
+    defStarve: 'Hungern',
     overlay: 'OBS-Overlay',
-    overlayTip:
-      'Overlay-URL als Browser-Quelle in OBS einbinden (transparenter Hintergrund). Drehen direkt in OBS: Klick oder Leertaste über „Interagieren". Für Steuerung aus diesem Browser: unten mit OBS verbinden.',
+    secDisplay: 'Anzeige',
+    secOverlay: 'Overlay',
     obsHeading: 'OBS-Fernsteuerung',
     obsHint:
-      'In OBS: Werkzeuge → WebSocket-Server-Einstellungen → Server aktivieren. Danach hier verbinden: „Drehen" und alle Änderungen steuern dann das Overlay in OBS.',
+      'OBS direkt aus diesem Browser steuern. In OBS den WebSocket-Server aktivieren (Werkzeuge → WebSocket-Server-Einstellungen), dann hier verbinden.',
     obsHost: 'Host',
     obsPort: 'Port',
     stepUp: 'Erhöhen',
@@ -38,7 +41,6 @@ export const messages = {
     entryLabel: 'Beschriftung',
     color: 'Farbe für',
     entryPercent: 'Wahrscheinlichkeit in % (optional)',
-    auto: 'automatisch',
     addEntry: 'Eintrag hinzufügen',
     removeEntry: 'Eintrag entfernen:',
     spin: 'Drehen',
@@ -56,12 +58,15 @@ export const messages = {
   en: {
     appTitle: 'Streamwheel',
     tagline: 'The spin wheel for your stream: custom probabilities, share links and an OBS overlay.',
+    defCook: 'Cook at home',
+    defOrder: 'Order takeout',
+    defStarve: 'Go hungry',
     overlay: 'OBS overlay',
-    overlayTip:
-      'Add the overlay URL as a browser source in OBS (transparent background). Spin directly in OBS via "Interact" (click or space). To control it from this browser, connect to OBS below.',
+    secDisplay: 'Display',
+    secOverlay: 'Overlay',
     obsHeading: 'OBS remote control',
     obsHint:
-      'In OBS: Tools → WebSocket Server Settings → enable the server. Then connect here: "Spin" and all changes will drive the overlay inside OBS.',
+      'Control OBS directly from this browser. Enable the WebSocket server in OBS (Tools → WebSocket Server Settings), then connect here.',
     obsHost: 'Host',
     obsPort: 'Port',
     stepUp: 'Increase',
@@ -92,7 +97,6 @@ export const messages = {
     entryLabel: 'Label',
     color: 'Color for',
     entryPercent: 'Probability in % (optional)',
-    auto: 'automatic',
     addEntry: 'Add entry',
     removeEntry: 'Remove entry:',
     spin: 'Spin',
