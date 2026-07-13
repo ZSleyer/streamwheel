@@ -119,6 +119,48 @@ body {
   box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px var(--accent-blue);
 }
 
+/*
+ * Native <dialog> CRT reveal (ported from Encounty): the panel unfolds from a
+ * center line on open and collapses back into one on close. allow-discrete on
+ * overlay/display keeps the dialog in the top layer for the close transition,
+ * so a plain .close() animates out with no JS deferral.
+ */
+dialog {
+  clip-path: inset(0);
+  opacity: 1;
+  transition:
+    clip-path 240ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 200ms ease-out,
+    overlay 240ms allow-discrete,
+    display 240ms allow-discrete;
+}
+dialog::backdrop {
+  opacity: 1;
+  transition: opacity 240ms ease-out;
+}
+dialog:not([open]) {
+  clip-path: inset(50% 0 50% 0);
+  opacity: 0;
+}
+dialog:not([open])::backdrop {
+  opacity: 0;
+}
+@starting-style {
+  dialog[open] {
+    clip-path: inset(50% 0 50% 0);
+    opacity: 0;
+  }
+  dialog[open]::backdrop {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  dialog,
+  dialog::backdrop {
+    transition: none;
+  }
+}
+
 /* Make the native color swatch fill its box, no inner padding or rounding. */
 input[type="color"]::-webkit-color-swatch-wrapper {
   padding: 0;

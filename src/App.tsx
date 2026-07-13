@@ -623,7 +623,11 @@ export default function App() {
               <dialog
                 ref={dialogRef}
                 aria-labelledby="settings-title"
-                className="t-panel m-auto w-[calc(100%-2rem)] max-w-2xl p-6 text-[var(--text-primary)] shadow-2xl backdrop:bg-black/60"
+                onClick={(ev) => {
+                  // A click landing on the dialog itself is a backdrop click (content sits in children).
+                  if (ev.target === dialogRef.current) closeSettings()
+                }}
+                className="t-panel m-auto w-[calc(100%-2rem)] max-w-2xl p-6 text-[var(--text-primary)] backdrop:bg-black/60"
               >
                 <div className="mb-4 flex items-center justify-between gap-4">
                   <h2 id="settings-title" className="flex items-center gap-2 text-xl font-semibold uppercase tracking-wide">
